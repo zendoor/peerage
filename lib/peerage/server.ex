@@ -4,7 +4,6 @@ defmodule Peerage.Provider do
 end
 
 defmodule Peerage.Server do
-
   @moduledoc """
   Supervised server that polls the configured Provider every so often,
   deduplicating results, compares to already-connected nodes, and
@@ -31,44 +30,48 @@ defmodule Peerage.Server do
     {:noreply, state}
   end
 
-  def poll,         do: apply(provider(), :poll, [])
-  def interval,     do: Application.get_env(:peerage, :interval, 10)
+  def poll, do: apply(provider(), :poll, [])
+  def interval, do: Application.get_env(:peerage, :interval, 10)
   def log_results?, do: Application.get_env(:peerage, :log_results, true)
 
-  defoverridable [poll: 0, interval: 0]
+  defoverridable poll: 0, interval: 0
 
   defp discover do
     poll()
     |> only_fresh_node_names
-    |> Enum.map(&([&1, connect_to_node(&1)]))
+    |> Enum.map(&[&1, connect_to_node(&1)])
     |> log_results
   end
 
   defp log_results(ls) do
     if log_results?() do
       table = [["NAME", "RESULT OF ATTEMPT"]] ++ ls
-      Logger.debug """
-      [Peerage #{vsn()}][ #{provider() }] Discovery every #{interval()}s.
 
-      #{ table |> Enum.map(&log_one/1) |> Enum.join("\n") }
+      if Peerage.Env.debug_logs_enabled?() do
+        Logger.debug("""
+        [Peerage #{vsn()}][ #{provider()}] Discovery every #{interval()}s.
 
-      #{ ["     LIVE NODES", [Atom.to_string(node()), " (self)"]] ++ Node.list
-        |> Enum.join("\n     ")
-      }
-      """
+        #{table |> Enum.map(&log_one/1) |> Enum.join("\n")}
+
+        #{(["     LIVE NODES", [Atom.to_string(node()), " (self)"]] ++ Node.list()) |> Enum.join("\n     ")}
+        """)
+      end
     end
   end
-  defp log_one([s,ok]) do
-    "     " <> String.pad_trailing("#{s}",20) <> String.pad_trailing("#{ok}",10)
+
+  defp log_one([s, ok]) do
+    "     " <> String.pad_trailing("#{s}", 20) <> String.pad_trailing("#{ok}", 10)
   end
+
   defp vsn, do: Application.spec(:peerage)[:vsn]
 
   defp only_fresh_node_names(ps) do
     ps
-    |> MapSet.new
-    |> MapSet.difference(MapSet.new(Node.list))
-    |> MapSet.to_list
+    |> MapSet.new()
+    |> MapSet.difference(MapSet.new(Node.list()))
+    |> MapSet.to_list()
   end
+
   defp provider do
     Application.get_env(:peerage, :via, Peerage.Via.Self)
   end
@@ -86,5 +89,3 @@ defmodule Peerage.Server do
     end
   end
 end
-
-
